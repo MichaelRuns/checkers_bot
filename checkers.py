@@ -17,7 +17,7 @@ class CheckerGame:
         self.player_turn = 'A'
         self.taken_pieces = {'A': "", 'B': ""}
         self.transition_table = {}
-        self.state_values = {}
+        self.value_table = {}
         try:
             with open('transition_table.pickle', 'rb') as f:
                 self.transition_table = pickle.load(f)
@@ -189,6 +189,12 @@ class CheckerGame:
                     bfs_queue.append((new_row, new_col, jump_move))
     def train(self):
         print("Training...")
+        print('Done training!')
+        with open('transition_table.pickle', 'wb') as f:
+            pickle.dump(self.transition_table, f)
+        with open('value_table.pickle', 'wb') as f:
+            pickle.dump(self.value_table, f)
+        
 
 if __name__ == '__main__':
     game = CheckerGame()
