@@ -1,6 +1,7 @@
 import re
 import copy
 import random
+import pickle
 class CheckerGame:
     def __init__(self):
         self.board = [
@@ -15,6 +16,18 @@ class CheckerGame:
         ]
         self.player_turn = 'A'
         self.taken_pieces = {'A': "", 'B': ""}
+        self.transition_table = {}
+        self.state_values = {}
+        try:
+            with open('transition_table.pickle', 'rb') as f:
+                self.transition_table = pickle.load(f)
+        except FileNotFoundError:
+            print("Transision table pickle file not found. Creating new transition table.")
+        try:
+            with open('state_values.pickle', 'rb') as f:
+                self.state_values = pickle.load(f)
+        except FileNotFoundError:
+            print("State values pickle file not found. Creating new state values.")
 
     def display_board(self, board, taken_pieces):
         print("  0️⃣ 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣" + "    " + taken_pieces['A'])
@@ -174,7 +187,12 @@ class CheckerGame:
                 if self.is_valid_move(jump_move, board, player):
                     valid_actions.append(jump_move)
                     bfs_queue.append((new_row, new_col, jump_move))
+    def train(self):
+        print("Training...")
 
 if __name__ == '__main__':
     game = CheckerGame()
+    play_or_train = input("Play or train? (p/t)\n")
+    if play_or_train == 't':
+        game.train()
     game.start_game()
