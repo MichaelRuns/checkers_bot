@@ -19,6 +19,7 @@ class CheckerGame:
         self.transition_table = {}
         self.value_table = {}
         self.transition_counts = {}
+        self.epsilon = 0.1
         try:
             with open('transition_table.pickle', 'rb') as f:
                 self.transition_table = pickle.load(f)
@@ -121,14 +122,14 @@ class CheckerGame:
     def is_game_over(self):
         return len(self.taken_pieces['A']) == 12 or len(self.taken_pieces['B']) == 12
 
-    def play_game(self, humans):
+    def play_game(self, humans, cpu_1_mode, cpu_2_mode):
         game_history = []
         while not self.is_game_over():
             self.display_board(self.board, self.taken_pieces)
             move = None
             if not humans[self.player_turn]:
                 options = self.get_all_moves(self.board, self.player_turn)
-                move = self.do_random_move(options)
+                move = self.computer_move(options, cpu_1_mode if self.player_turn == 'A' else cpu_2_mode)
                 print(f"Robo{'Red' if self.player_turn == 'A' else 'Blue' }'s move: {move}")
             else:
                 move = input(f"{ 'Red' if self.player_turn == 'A' else 'Blue' }'s turn.\nEnter your move: [row][col]to[row][col] (comma sep for multiple moves)\n")
@@ -149,7 +150,9 @@ class CheckerGame:
             print("Red wins!")
         elif self.has_won('B', self.taken_pieces):
             print("Blue wins!")
+        self.display_board(self.board, self.taken_pieces)
         return game_history
+    
     def start_game(self):
         self.display_board(self.board, self.taken_pieces)
         player_count = None
@@ -160,7 +163,7 @@ class CheckerGame:
             humans['B'] = False
         if player_count < '1':
             humans['A'] = False
-        self.play_game(humans)
+        self.play_game(humans, 'random', 'random')
     
     def get_all_moves(self, board, player):
         valid_actions = []
@@ -197,6 +200,7 @@ class CheckerGame:
                 if self.is_valid_move(jump_move, board, player):
                     valid_actions.append(jump_move)
                     bfs_queue.append((new_row, new_col, jump_move))
+
     def get_reward(self, taken_pieces, player):
         if self.has_won(player, taken_pieces):
             return 1
@@ -204,6 +208,30 @@ class CheckerGame:
             return -1
         else:
             return 0
+        
+    def computer_move(self, moves, mode):
+        if mode == 'random':
+            return self.do_random_move(moves)
+        elif mode == 'explore':
+            return self.do_explore_move(moves)
+        elif mode == 'exploit':
+            return self.do_exploit_move(moves)
+        
+    def do_exploit_move(self, moves):
+        move = None
+        max_value = -1
+        for m in moves:
+            if self.value_table.get(m, 0) > max_value:
+                move = m
+                max_value = self.value_table.get(m, 0)
+        return move
+    
+    def do_explore_move(self, moves):
+        if random.random() < self.epsilon:
+            return self.do_random_move(moves)
+        else:
+            return self.do_exploit_move(moves)
+        
     def do_random_move(self, moves):
         move = random.choice(moves)
         return move
@@ -216,7 +244,7 @@ class CheckerGame:
     
     def train(self):
         print("Training...")
-        history = self.play_game({'A':False, 'B':False})
+        history = self.play_game({'A':False, 'B':False}, 'random', 'explore')
         print(f'played {len(history)} turns')
         print('Done training!')
         with open('transition_table.pickle', 'wb') as f:
@@ -227,7 +255,7 @@ class CheckerGame:
 
 if __name__ == '__main__':
     game = CheckerGame()
-    play_or_train = input("Play or train? (p/t)\n")
+    play_or_train = input("Play or train? ([p]/t)\n")
     if play_or_train == 't':
         game.train()
     else:
