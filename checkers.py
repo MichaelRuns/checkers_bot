@@ -1,5 +1,6 @@
 import re
 import copy
+import random
 class CheckerGame:
     def __init__(self):
         self.board = [
@@ -25,7 +26,7 @@ class CheckerGame:
                 elif board[i][j] == 'B':
                     row += '🔵'
                 elif board[i][j] == 'C':
-                    row += '❤️'
+                    row += '❌'
                 elif board[i][j] == 'D':
                     row += '💙'
                 elif (i + j) % 2 == 0:
@@ -104,10 +105,16 @@ class CheckerGame:
     def is_game_over(self):
         return len(self.taken_pieces['A']) == 12 or len(self.taken_pieces['B']) == 12
 
-    def play_game(self):
+    def play_game(self, humans):
         while not self.is_game_over():
             self.display_board(self.board, self.taken_pieces)
-            move = input(f"{ 'Red' if self.player_turn == 'A' else 'Blue' }'s turn.\nEnter your move: [row][col]to[row][col] (comma sep for multiple moves)\n")
+            move = None
+            if not humans[self.player_turn]:
+                options = self.get_all_moves(self.board, self.player_turn)
+                move = random.choice(options)
+                print(f"Computer's move: {move}")
+            else:
+                move = input(f"{ 'Red' if self.player_turn == 'A' else 'Blue' }'s turn.\nEnter your move: [row][col]to[row][col] (comma sep for multiple moves)\n")
             if move == 'help':
                 print(self.get_all_moves(self.board, self.player_turn))
             elif move == 'quit':
@@ -123,12 +130,12 @@ class CheckerGame:
         player_count = None
         while(player_count not in ['0', '1', '2']):
             player_count = input("How many players? (0, 1 or 2)\n")
-        if player_count == '0':
-            print('sorry, not implemented yet')
-        elif player_count == '1':
-            print('sorry, not implemented yet')
-        elif player_count == '2':
-            self.play_game()
+        humans = {'A':True, 'B':True}
+        if player_count < '2':
+            humans['B'] = False
+        if player_count < '1':
+            humans['A'] = False
+        self.play_game(humans)
     
     def get_all_moves(self, board, player):
         valid_actions = []
