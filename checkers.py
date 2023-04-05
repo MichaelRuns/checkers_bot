@@ -22,6 +22,7 @@ class CheckerGame:
         self.epsilon = 0.1
         self.num_epochs = 10
         self.games_per_epoch = 2
+        self.learning_rate = 0.1
         try:
             with open('transition_table.pickle', 'rb') as f:
                 self.transition_table = pickle.load(f)
@@ -129,8 +130,10 @@ class CheckerGame:
         while not self.is_game_over():
             if show_game: self.display_board(self.board, self.taken_pieces)
             move = None
+            options = self.get_all_moves(self.board, self.player_turn)
+            if len(options) == 0:
+                break
             if not humans[self.player_turn]:
-                options = self.get_all_moves(self.board, self.player_turn)
                 move = self.computer_move(options, cpu_1_mode if self.player_turn == 'A' else cpu_2_mode)
                 if show_game: print(f"Robo{'Red' if self.player_turn == 'A' else 'Blue' }'s move: {move}")
             else:
@@ -152,6 +155,8 @@ class CheckerGame:
             print("Red wins!")
         elif self.has_won('B', self.taken_pieces):
             print("Blue wins!")
+        else:
+            print("Tie game!")
         if show_game: self.display_board(self.board, self.taken_pieces)
         self.board = [
             ['-', 'A', '-', 'A', '-', 'A', '-', 'A'],
@@ -238,6 +243,8 @@ class CheckerGame:
             if self.value_table.get(m, 0) > max_value:
                 move = m
                 max_value = self.value_table.get(m, 0)
+        if max_value <= 0:
+            return self.do_random_move(moves)
         return move
     
     def do_explore_move(self, moves):
@@ -262,10 +269,12 @@ class CheckerGame:
         # transistion_counts {s,a,s'} -> count of times s,a,s' has been seen but also
         # {s,a} -> count of times s,a has been seen. used to calculate transition probabilities
         print("Training...")
+        self.value_table = {}
+        self.transition_table = {}
         for epoch in range(self.num_epochs):
             for game in range(self.games_per_epoch):  
                 print(f'Epoch {epoch}: game {game}')
-                history = self.play_game({'A':False, 'B':False}, 'random', 'random', False)
+                history = self.play_game({'A':False, 'B':False}, 'random', 'explore', False)
                 print(f'played {len(history)} turns')
                 for i, turn in enumerate(history):
                     old_board, old_taken, old_turn, move, new_board, reward, game_over = turn
@@ -276,8 +285,15 @@ class CheckerGame:
                         self.transition_counts[(old_board, old_turn, move, new_board)] = 2
                     else:
                         self.transition_counts[(old_board, old_turn, move)] += 1
-                        self.transition_counts[(old_board, old_turn, move, new_board)] += 1
-                    self.transition_table[(old_board, old_turn, move, new_board)] = reward    
+                        self.transition_counts[(old_board, old_turn, move, new_board)] += 1 
+                for key in self.transition_counts.keys():
+                    if len(key) == 3:
+                        val = self.transition_counts[key] / self.transition_counts[(key[0], key[1], key[2])]
+                        if key not in self.transition_table:
+                            self.transition_table[key] = val
+                        else:
+                            self.transition_table[key] += self.transition_table[key] + self.learning_rate * (self.transition_table[key] - val)
+
         print('Done training!')
         with open('transition_table.pickle', 'wb') as f:
             pickle.dump(self.transition_table, f)
