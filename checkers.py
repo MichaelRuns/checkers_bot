@@ -36,47 +36,37 @@ class CheckerGame:
             print(row)
         print("  0️⃣ 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣" + "     "+ taken_pieces['B'])
 
-    def is_valid_move(self, move):
+    def is_valid_move(self, move, board, player):
         move = move.replace(' ', '').upper()
         moves = move.split(',')
-        board_copy = copy.deepcopy(self.board)
+        board_copy = copy.deepcopy(board)
         jumper = None
         for i, mv in enumerate(moves):
             if not re.match(r'^([A-H][0-7]TO[A-H][0-7])+$', mv):
-                print('format is invalid')
                 return False
             start_row, start_col, end_row, end_col = ord(mv[0]) - ord('A'), int(mv[1]), ord(mv[4]) - ord('A'), int(mv[5])
             if i > 0:
                 if jumper is None:
-                    print('cannot make multiple moves without jumping')
                     return False
                 elif jumper != (start_row, start_col):
-                    print('must continue jumping')
                     return False
-            if (ord(board_copy[start_row][start_col]) - ord(self.player_turn)) % 2 != 0:
-                print('not your piece')
+            if (ord(board_copy[start_row][start_col]) - ord(player)) % 2 != 0:
                 return False
             if board_copy[end_row][end_col] != '-':
-                print('destination is not empty')
                 return False
             if abs(start_row - end_row) != abs(start_col - end_col):
-                print('not a diagonal move')
                 return False
             if board_copy[start_row][start_col] == 'A' and end_row <= start_row:
-                print('red must move down')
                 return False
             if board_copy[start_row][start_col] == 'B' and end_row >= start_row:
-                print('blue must move up')
                 return False 
             if abs(start_row - end_row) == 1:
                 board_copy[end_row][end_col] = board_copy[start_row][start_col]
                 board_copy[start_row][start_col] = '-'
             elif abs(start_row - end_row) == 2:
                 if board_copy[(start_row + end_row) // 2][(start_col + end_col) // 2] == '-':
-                    print('no piece to jump')
                     return False
-                if (ord(board_copy[(start_row + end_row) // 2][(start_col + end_col) // 2]) - ord(self.player_turn)) % 2 == 0:
-                    print('cannot jump your own piece')
+                if (ord(board_copy[(start_row + end_row) // 2][(start_col + end_col) // 2]) - ord(player)) % 2 == 0:
                     return False
                 board_copy[end_row][end_col] = board_copy[start_row][start_col]
                 board_copy[(start_row + end_row) // 2][(start_col + end_col) // 2] = '-'
@@ -100,7 +90,7 @@ class CheckerGame:
                 elif taken == 'B':
                     taken = '🔵'
                 elif taken == 'C':
-                    taken = '❤️'
+                    taken = '❌'
                 elif taken == 'D':
                     taken = '💙'
                 taken_pieces[self.player_turn] += taken
@@ -118,7 +108,11 @@ class CheckerGame:
         while not self.is_game_over():
             self.display_board(self.board, self.taken_pieces)
             move = input(f"{ 'Red' if self.player_turn == 'A' else 'Blue' }'s turn.\nEnter your move: [row][col]to[row][col] (comma sep for multiple moves)\n")
-            if self.is_valid_move(move):
+            if move == 'help':
+                print(self.get_all_moves(self.board, self.player_turn))
+            elif move == 'quit':
+                break
+            elif self.is_valid_move(move,self.board, self.player_turn):
                 self.make_move(move,self.board, self.taken_pieces)
                 self.player_turn = 'B' if self.player_turn == 'A' else 'A'
             else:
@@ -136,8 +130,41 @@ class CheckerGame:
         elif player_count == '2':
             self.play_game()
     
-    def get_all_moves(self):
-        pass
+    def get_all_moves(self, board, player):
+        valid_actions = []
+        for row in range(8):
+            for col in range(8):
+                if (ord(board[row][col]) - ord(player)) % 2 == 0:
+                    self.get_all_singles(board, player, (row, col), valid_actions)
+                    self.get_all_jumps(board, player, (row, col), valid_actions)
+        return valid_actions
+    
+
+    def get_all_singles(self, board, player, pos, valid_actions):
+        row, col = pos
+        if (ord(board[row][col]) - ord(player)) % 2 == 0:
+            for drow, dcol in [(-1, -1), (-1,1), (1,-1), (1,1)]:
+                new_row, new_col = row + drow, col + dcol
+                single_move = f'{chr(row+ord("A"))}{col}to{chr(new_row+ord("A"))}{new_col}'
+                if self.is_valid_move(single_move, board, player):
+                    valid_actions.append(single_move)
+
+
+    def get_all_jumps(self, board, player, pos, valid_actions):
+        row, col = pos
+        if (ord(board[row][col]) - ord(player)) % 2 != 0:
+            return       
+        bfs_queue = [(row, col, '')]
+        while bfs_queue:
+            row, col, path = bfs_queue.pop(0)
+            for drow, dcol in [(-2, -2), (-2,2), (2,-2), (2,2)]:
+                new_row, new_col = row + drow, col + dcol
+                jump_move = f'{chr(row+ord("A"))}{col}to{chr(new_row+ord("A"))}{new_col}'
+                if path != '':
+                    jump_move = path + ',' + jump_move
+                if self.is_valid_move(jump_move, board, player):
+                    valid_actions.append(jump_move)
+                    bfs_queue.append((new_row, new_col, jump_move))
 
 if __name__ == '__main__':
     game = CheckerGame()
