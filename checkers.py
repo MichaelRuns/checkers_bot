@@ -20,6 +20,8 @@ class CheckerGame:
         self.value_table = {}
         self.transition_counts = {}
         self.epsilon = 0.1
+        self.num_epochs = 10
+        self.games_per_epoch = 2
         try:
             with open('transition_table.pickle', 'rb') as f:
                 self.transition_table = pickle.load(f)
@@ -122,15 +124,15 @@ class CheckerGame:
     def is_game_over(self):
         return len(self.taken_pieces['A']) == 12 or len(self.taken_pieces['B']) == 12
 
-    def play_game(self, humans, cpu_1_mode, cpu_2_mode):
+    def play_game(self, humans, cpu_1_mode, cpu_2_mode, show_game=True):
         game_history = []
         while not self.is_game_over():
-            self.display_board(self.board, self.taken_pieces)
+            if show_game: self.display_board(self.board, self.taken_pieces)
             move = None
             if not humans[self.player_turn]:
                 options = self.get_all_moves(self.board, self.player_turn)
                 move = self.computer_move(options, cpu_1_mode if self.player_turn == 'A' else cpu_2_mode)
-                print(f"Robo{'Red' if self.player_turn == 'A' else 'Blue' }'s move: {move}")
+                if show_game: print(f"Robo{'Red' if self.player_turn == 'A' else 'Blue' }'s move: {move}")
             else:
                 move = input(f"{ 'Red' if self.player_turn == 'A' else 'Blue' }'s turn.\nEnter your move: [row][col]to[row][col] (comma sep for multiple moves)\n")
             if move == 'help':
@@ -139,7 +141,7 @@ class CheckerGame:
                 break
             elif self.is_valid_move(move,self.board, self.player_turn):
                 old_board = copy.deepcopy(self.board)
-                old_taken = self.taken_pieces['A'], self.taken_pieces['B']
+                old_taken = self.taken_pieces
                 old_turn = self.player_turn
                 self.make_move(move,self.board, self.taken_pieces)
                 game_history.append((old_board, old_taken, old_turn, move, self.board, (self.get_reward(self.taken_pieces, 'A'), self.get_reward(self.taken_pieces, 'B')), self.is_game_over()))
@@ -150,7 +152,19 @@ class CheckerGame:
             print("Red wins!")
         elif self.has_won('B', self.taken_pieces):
             print("Blue wins!")
-        self.display_board(self.board, self.taken_pieces)
+        if show_game: self.display_board(self.board, self.taken_pieces)
+        self.board = [
+            ['-', 'A', '-', 'A', '-', 'A', '-', 'A'],
+            ['A', '-', 'A', '-', 'A', '-', 'A', '-'],
+            ['-', 'A', '-', 'A', '-', 'A', '-', 'A'],
+            ['-', '-', '-', '-', '-', '-', '-', '-'],
+            ['-', '-', '-', '-', '-', '-', '-', '-'],
+            ['B', '-', 'B', '-', 'B', '-', 'B', '-'],
+            ['-', 'B', '-', 'B', '-', 'B', '-', 'B'],
+            ['B', '-', 'B', '-', 'B', '-', 'B', '-']
+        ]
+        self.player_turn = 'A'
+        self.taken_pieces = {'A': "", 'B': ""}
         return game_history
     
     def start_game(self):
@@ -200,7 +214,7 @@ class CheckerGame:
                 if self.is_valid_move(jump_move, board, player):
                     valid_actions.append(jump_move)
                     bfs_queue.append((new_row, new_col, jump_move))
-
+                    
     def get_reward(self, taken_pieces, player):
         if self.has_won(player, taken_pieces):
             return 1
@@ -243,9 +257,27 @@ class CheckerGame:
         return len(taken_pieces[opponent]) == 12
     
     def train(self):
+        # transistion_table: {s,a,s'} -> r
+        # value_table: {s} -> v
+        # transistion_counts {s,a,s'} -> count of times s,a,s' has been seen but also
+        # {s,a} -> count of times s,a has been seen. used to calculate transition probabilities
         print("Training...")
-        history = self.play_game({'A':False, 'B':False}, 'random', 'explore')
-        print(f'played {len(history)} turns')
+        for epoch in range(self.num_epochs):
+            for game in range(self.games_per_epoch):  
+                print(f'Epoch {epoch}: game {game}')
+                history = self.play_game({'A':False, 'B':False}, 'random', 'random', False)
+                print(f'played {len(history)} turns')
+                for i, turn in enumerate(history):
+                    old_board, old_taken, old_turn, move, new_board, reward, game_over = turn
+                    old_board = tuple(tuple(row) for row in old_board)
+                    new_board = tuple(tuple(row) for row in new_board)
+                    if (old_board, old_turn, move, new_board) not in self.transition_counts:
+                        self.transition_counts[(old_board, old_turn, move)] = 2
+                        self.transition_counts[(old_board, old_turn, move, new_board)] = 2
+                    else:
+                        self.transition_counts[(old_board, old_turn, move)] += 1
+                        self.transition_counts[(old_board, old_turn, move, new_board)] += 1
+                    self.transition_table[(old_board, old_turn, move, new_board)] = reward    
         print('Done training!')
         with open('transition_table.pickle', 'wb') as f:
             pickle.dump(self.transition_table, f)
