@@ -53,6 +53,8 @@ class CheckerGame:
                     return False
             if (ord(board_copy[start_row][start_col]) - ord(player)) % 2 != 0:
                 return False
+            if board_copy[start_row][start_col] == '-':
+                return False
             if board_copy[end_row][end_col] != '-':
                 return False
             if abs(start_row - end_row) != abs(start_col - end_col):
@@ -112,7 +114,7 @@ class CheckerGame:
             if not humans[self.player_turn]:
                 options = self.get_all_moves(self.board, self.player_turn)
                 move = random.choice(options)
-                print(f"Computer's move: {move}")
+                print(f"Robo{'Red' if self.player_turn == 'B' else 'Blue' }'s move: {move}")
             else:
                 move = input(f"{ 'Red' if self.player_turn == 'A' else 'Blue' }'s turn.\nEnter your move: [row][col]to[row][col] (comma sep for multiple moves)\n")
             if move == 'help':
