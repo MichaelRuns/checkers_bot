@@ -293,6 +293,7 @@ class CheckerGame:
         for train_mode in ['explore', 'explore']:
             for epoch in range(self.num_epochs):
                 self.transition_counts = {}
+                histories = []
                 for game in range(self.games_per_epoch):
                     computer_player = 'A' if game % 2 == 0 else 'B'
                     a_mode = computer_mode if computer_player == 'A' else train_mode
@@ -300,6 +301,9 @@ class CheckerGame:
                     print(f'Epoch {epoch}: game {game} against {train_mode} opponent')
                     history = self.play_game({'A':False, 'B':False}, a_mode, b_mode, False)
                     print(f'played {len(history)} turns')
+                    histories.append(history)
+                print(f'played {len(histories)} games ')
+                for history in histories:
                     for i, turn in enumerate(history):
                         old_board, old_taken, old_turn, move, new_board, reward, game_over = turn
                         old_board = tuple(tuple(row) for row in old_board)
