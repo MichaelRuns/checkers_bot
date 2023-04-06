@@ -135,7 +135,7 @@ class CheckerGame:
             if len(options) == 0:
                 break
             if not humans[self.player_turn]:
-                move = self.computer_move(options, cpu_1_mode if self.player_turn == 'A' else cpu_2_mode)
+                move = self.computer_move(options, cpu_1_mode if self.player_turn == 'A' else cpu_2_mode, self.board, self.player_turn)
                 if show_game: print(f"Robo{'Red' if self.player_turn == 'A' else 'Blue' }'s move: {move}")
             else:
                 move = input(f"{ 'Red' if self.player_turn == 'A' else 'Blue' }'s turn.\nEnter your move: [row][col]to[row][col] (comma sep for multiple moves)\n")
@@ -241,30 +241,33 @@ class CheckerGame:
         else:
             return 0
         
-    def computer_move(self, moves, mode):
+    def computer_move(self, moves, mode, board, player):
         if mode == 'random':
             return self.do_random_move(moves)
         elif mode == 'explore':
-            return self.do_explore_move(moves)
+            return self.do_explore_move(moves, board, player)
         elif mode == 'exploit':
-            return self.do_exploit_move(moves)
+            return self.do_exploit_move(moves, board, player)
         
-    def do_exploit_move(self, moves):
+    def do_exploit_move(self, moves, board, player):
         move = None
         max_value = -1
         for m in moves:
-            if self.value_table.get(m, 0) > max_value:
+            result_board = copy.deepcopy(board)
+            self.make_move(m, result_board, {'A': '', 'B': ''})
+            result_board = tuple(tuple(row) for row in result_board)
+            if self.value_table.get((result_board, player), 0) > max_value:
                 move = m
-                max_value = self.value_table.get(m, 0)
+                max_value = self.value_table.get((result_board, player), 0)
         if max_value <= 0:
             return self.do_random_move(moves)
         return move
     
-    def do_explore_move(self, moves):
+    def do_explore_move(self, moves, board, player):
         if random.random() < self.epsilon:
             return self.do_random_move(moves)
         else:
-            return self.do_exploit_move(moves)
+            return self.do_exploit_move(moves, board, player)
         
     def do_random_move(self, moves):
         move = random.choice(moves)
@@ -279,7 +282,7 @@ class CheckerGame:
     def train(self):
         # transistion_table: {s,a,s'} -> r
         # value_table: {s} -> v
-        # transistion_counts {s,a,s'} -> count of times s,a,s' has been seen but also
+        # transition_counts {s,a,s'} -> count of times s,a,s' has been seen but also
         # {s,a} -> count of times s,a has been seen. used to calculate transition probabilities
         print("Training...")
         self.value_table = {}
@@ -323,8 +326,10 @@ class CheckerGame:
                     for  board, player, move, new_board in self.transition_table.keys():
                         if (board, player) not in self.value_table:
                             self.value_table[board, player] = 0
-                        move_value = self.transition_table[board, player, move, new_board] + self.gamma * self.value_table[new_board]
-                        self.value_table[board, player] += self.learning_rate * (move_value - self.value_table[board])
+                        if (new_board, player) not in self.value_table:
+                            self.value_table[new_board, player] = 0
+                        move_value = self.transition_table[board, player, move, new_board] + self.gamma * self.value_table[new_board, player]
+                        self.value_table[board, player] += self.learning_rate * (move_value - self.value_table[board, player])
         print(f'Done training! with winrate {100.0 * games_won/games_played}%')
         with open('transition_table.pickle', 'wb') as f:
             pickle.dump(self.transition_table, f)
