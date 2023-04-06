@@ -290,7 +290,7 @@ class CheckerGame:
         computer_mode = 'explore'
         games_played = 0
         games_won = 0
-        for train_mode in ['random', 'exploit']:
+        for train_mode in ['explore', 'explore']:
             for epoch in range(self.num_epochs):
                 self.transition_counts = {}
                 for game in range(self.games_per_epoch):
