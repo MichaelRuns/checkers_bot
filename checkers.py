@@ -20,9 +20,10 @@ class CheckerGame:
         self.value_table = {}
         self.transition_counts = {}
         self.epsilon = 0.1
-        self.num_epochs = 10
-        self.games_per_epoch = 2
+        self.num_epochs = 100
+        self.games_per_epoch = 1000
         self.learning_rate = 0.1
+        self.gamma = 0.90
         try:
             with open('transition_table.pickle', 'rb') as f:
                 self.transition_table = pickle.load(f)
@@ -178,11 +179,23 @@ class CheckerGame:
         while(player_count not in ['0', '1', '2']):
             player_count = input("How many players? (0, 1 or 2)\n")
         humans = {'A':True, 'B':True}
+        computer_mode_a, computer_mode_b = 'random', 'random'
         if player_count < '2':
+            computer_mode_b = None
+            while(computer_mode_b not in ['random', 'exploit', 'explore']):
+                computer_mode_b = input("Select computer mode for player B (random/exploit/explore):\n")
+                if computer_mode_b not in ['random', 'exploit', 'explore']:
+                    print("Invalid mode selection. Please choose from 'random', 'exploit', or 'explore'.")
             humans['B'] = False
         if player_count < '1':
+            computer_mode_a = None
+            while(computer_mode_a not in ['random', 'exploit', 'explore']):
+                computer_mode_a = input("Select computer mode for player A (random/exploit/explore):\n")
+                if computer_mode_a not in ['random', 'exploit', 'explore']:
+                    print("Invalid mode selection. Please choose from 'random', 'exploit', or 'explore'.")
             humans['A'] = False
-        self.play_game(humans, 'random', 'random')
+        self.play_game(humans, computer_mode_a, computer_mode_b)
+
     
     def get_all_moves(self, board, player):
         valid_actions = []
@@ -271,30 +284,48 @@ class CheckerGame:
         print("Training...")
         self.value_table = {}
         self.transition_table = {}
-        for epoch in range(self.num_epochs):
-            for game in range(self.games_per_epoch):  
-                print(f'Epoch {epoch}: game {game}')
-                history = self.play_game({'A':False, 'B':False}, 'random', 'explore', False)
-                print(f'played {len(history)} turns')
-                for i, turn in enumerate(history):
-                    old_board, old_taken, old_turn, move, new_board, reward, game_over = turn
-                    old_board = tuple(tuple(row) for row in old_board)
-                    new_board = tuple(tuple(row) for row in new_board)
-                    if (old_board, old_turn, move, new_board) not in self.transition_counts:
-                        self.transition_counts[(old_board, old_turn, move)] = 2
-                        self.transition_counts[(old_board, old_turn, move, new_board)] = 2
-                    else:
-                        self.transition_counts[(old_board, old_turn, move)] += 1
-                        self.transition_counts[(old_board, old_turn, move, new_board)] += 1 
-                for key in self.transition_counts.keys():
-                    if len(key) == 3:
-                        val = self.transition_counts[key] / self.transition_counts[(key[0], key[1], key[2])]
-                        if key not in self.transition_table:
-                            self.transition_table[key] = val
+        computer_mode = 'explore'
+        games_played = 0
+        games_won = 0
+        for train_mode in ['random', 'exploit']:
+            for epoch in range(self.num_epochs):
+                self.transition_counts = {}
+                for game in range(self.games_per_epoch):
+                    computer_player = 'A' if game % 2 == 0 else 'B'
+                    a_mode = computer_mode if computer_player == 'A' else train_mode
+                    b_mode = computer_mode if computer_player == 'B' else train_mode  
+                    print(f'Epoch {epoch}: game {game} against {train_mode} opponent')
+                    history = self.play_game({'A':False, 'B':False}, a_mode, b_mode, False)
+                    print(f'played {len(history)} turns')
+                    for i, turn in enumerate(history):
+                        old_board, old_taken, old_turn, move, new_board, reward, game_over = turn
+                        old_board = tuple(tuple(row) for row in old_board)
+                        new_board = tuple(tuple(row) for row in new_board)
+                        if (old_board, old_turn, move, new_board) not in self.transition_counts:
+                            self.transition_counts[(old_board, old_turn, move)] = 2
+                            self.transition_counts[(old_board, old_turn, move, new_board)] = 2
                         else:
-                            self.transition_table[key] += self.transition_table[key] + self.learning_rate * (self.transition_table[key] - val)
-
-        print('Done training!')
+                            self.transition_counts[(old_board, old_turn, move)] += 1
+                            self.transition_counts[(old_board, old_turn, move, new_board)] += 1
+                        if game_over:
+                            self.value_table[new_board, 'A'] = reward[0]
+                            self.value_table[new_board, 'B'] = reward[1]
+                            if reward[0] == 1 and computer_player == 'A':
+                                games_won += 1
+                            games_played += 1
+                    for key in self.transition_counts.keys():
+                        if len(key) == 4:
+                            val = self.transition_counts[key] / self.transition_counts[(key[0], key[1], key[2])]
+                            if key not in self.transition_table:
+                                self.transition_table[key] = val
+                            else:
+                                self.transition_table[key] += self.transition_table[key] + self.learning_rate * (self.transition_table[key] - val)
+                    for  board, player, move, new_board in self.transition_table.keys():
+                        if (board, player) not in self.value_table:
+                            self.value_table[board, player] = 0
+                        move_value = self.transition_table[board, player, move, new_board] + self.gamma * self.value_table[new_board]
+                        self.value_table[board, player] += self.learning_rate * (move_value - self.value_table[board])
+        print(f'Done training! with winrate {100.0 * games_won/games_played}%')
         with open('transition_table.pickle', 'wb') as f:
             pickle.dump(self.transition_table, f)
         with open('value_table.pickle', 'wb') as f:
@@ -305,6 +336,8 @@ if __name__ == '__main__':
     game = CheckerGame()
     play_or_train = input("Play or train? ([p]/t)\n")
     if play_or_train == 't':
+        if input('are you sure? (y/[n])\n') != 'y':
+            exit()
         game.train()
     else:
         game.start_game()
